@@ -5,6 +5,7 @@ class Queue:
     queues = list()
 
     def __init__(self, service_rates):
+        self.queue = list()
         self.operators = [Operator(rate) for rate in service_rates]
         Queue.queues.append(self)
 
