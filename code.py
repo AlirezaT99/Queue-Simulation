@@ -17,8 +17,9 @@ def process_input():
     """reads N+1 lines and reports the parameters"""
     global fatigue_rate
     input_line_1 = re.split(',\\s*|\\s+', input())
-    parts_count, arrival_rate, reception_service_rate, fatigue_rate = input_line_1
-    queues = [re.split(',\\s*|\\s+', input()) for _ in range(parts_count)]
+    parts_count, arrival_rate, reception_service_rate, fatigue_rate = map(float, input_line_1)
+    queues = [re.split(',\\s*|\\s+', input()) for _ in range(int(parts_count))]
+    queues = [[float(float(j)) for j in i] for i in queues]
     return arrival_rate, reception_service_rate, queues
 
 
