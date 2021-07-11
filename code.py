@@ -5,7 +5,7 @@ from models import Queue
 
 N = 10000
 priority_prob = np.array([0.50, 0.20, 0.15, 0.10, 0.05])
-fatigue_rate = -1
+total_wait = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
 
 
 def sample_priorities(elements, n, weights) -> np.array:
@@ -13,13 +13,25 @@ def sample_priorities(elements, n, weights) -> np.array:
     return np.random.choice(elements, n, p=weights)
 
 
+def sample_next_queue(elements, n) -> np.array:
+    """returns an array of n random samples from given elements"""
+    return np.random.choice(elements, n)
+
+
+def sample_arrivals(arrival_rate, n):
+    inter_arrivals = np.random.exponential(1 / arrival_rate, size=n)
+    result = [inter_arrivals[0]]
+    for i in range(1, n):
+        result = np.append(result, result[-1] + inter_arrivals[i])
+    return result
+
+
 def process_input():
     """reads N+1 lines and reports the parameters"""
-    global fatigue_rate
-    input_line_1 = re.split(',\\s*|\\s+', input())
+    input_line_1 = map(float, re.split(',\\s*|\\s+', input()))
     parts_count, arrival_rate, reception_service_rate, fatigue_rate = input_line_1
-    queues = [re.split(',\\s*|\\s+', input()) for _ in range(parts_count)]
-    return arrival_rate, reception_service_rate, queues
+    queues = [list(map(float, re.split(',\\s*|\\s+', input()))) for _ in range(int(parts_count))]
+    return int(parts_count), fatigue_rate, arrival_rate, reception_service_rate, queues
 
 
 def setup_queues(main_service, queues):
@@ -29,19 +41,26 @@ def setup_queues(main_service, queues):
     Queue([main_service])  # Reception
 
 
-def sample_arrivals(arrival_rate):
-    inter_arrivals = np.random.exponential(arrival_rate, size=N)
-    result = [inter_arrivals[0]]
-    for i in range(1, N):
-        result = np.append(result, result[-1] + inter_arrivals[i])
-    return result
+def sample_fatigue(fatigue, n):
+    return np.random.exponential(1 / fatigue, size=n)
 
 
 def run_simulation():
-    arrival, service_rate, queues_info = process_input()
+    # Setup
+    queues_count, fatigue, arrival, service_rate, queues_info = process_input()
     setup_queues(service_rate, queues_info)
-    customers_arrival = sample_arrivals(arrival)
+    # Sample
+    customers_arrival = sample_arrivals(arrival, N)
     customers_priority = sample_priorities(range(5), N, priority_prob)
+    customers_next_queue = sample_next_queue(range(queues_count), N)
+    customers_early_departure = sample_fatigue(fatigue, N)
+    # Run
+    main_queue = Queue.queues.pop()
+    main_queue.run(customers_arrival, customers_priority)
+    for queue in Queue.queues:
+        queue.run([], [])  # TODO set by main
+    # Display stats
+    pass
 
 
 if __name__ == '__main__':
