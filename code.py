@@ -55,8 +55,8 @@ def run_simulation():
     customers_next_queue = sample_next_queue(range(queues_count), N)
     customers_early_departure = sample_fatigue(fatigue, N)
     # Run
-    main_queue = Queue.queues.pop()
-    main_queue.run(customers_arrival, customers_priority)
+    main_queue: Queue = Queue.queues.pop()
+    main_queue.run(customers_arrival, customers_priority, customers_early_departure)
     for queue in Queue.queues:
         queue.run([], [])  # TODO set by main
     # Display stats
