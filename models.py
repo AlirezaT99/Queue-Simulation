@@ -4,12 +4,15 @@ import numpy as np
 
 class Queue:
     queues = list()
+    customer_in_system = defaultdict(int)
 
     def __init__(self, service_rates):
         self.queue = deque()
         self.operators = [Operator(rate) for rate in service_rates]
         Queue.queues.append(self)
         self.customer_wait = defaultdict(list)
+        self.early_departed = 0
+        self.queue_len = list()
         # input for next queues
         self.departure = list()
         self.fatigue_remainder = list()
@@ -19,12 +22,14 @@ class Queue:
     def run(self, arrivals, priorities, give_up_times, next_queue=None):
         assert len(arrivals) == len(priorities)
         for i in range(len(arrivals)):
+            self.queue_len.append(len(self.queue))
             next_op = self.next_free_operator(arrivals[i])
             customer_next_queue = next_queue[i] if next_queue else None
             # Who else is exhausted ?
             for customer in self.queue:
                 if arrivals[i] >= customer[1] + customer[3]:  # TODO check indices
                     self.customer_wait[customer[2]].append(customer[3])
+                    self.early_departed += 1
                     self.queue.remove(customer)
             # Handle queue (if there exists a free op and someone in the queue)
             while self.queue and next_op[1]:
@@ -37,24 +42,28 @@ class Queue:
             operator, err = self.next_free_operator(arrivals[i])
             if not err:  # No need to wait
                 self.assign_to_operator(operator, arrivals[i], priorities[i], give_up_times[i], self.next_queue)
-                self.customer_wait[priorities[i]].append(0.0)
+                self.customer_wait[priorities[i]].append(0)
             else:  # wait in queue
                 self.push_to_queue(i, arrivals[i], priorities[i], give_up_times[i], customer_next_queue)
 
     def assign_to_operator(self, operator, arrival, priority, give_up_time, customer_next_queue, in_queue=False):
         old_next_free = operator.next_free
         operator.assign_job(arrival, priority, in_queue)
-        # what if the customer decides to leave during service
+        # What if the customer decides to leave during service
         if operator.next_free > arrival + give_up_time > old_next_free:
             operator.next_free = arrival + give_up_time
-            operator.service_log[priority].pop()
+            operator.service_log[priority].pop()  # Chose not to calculate their service
             self.customer_wait[priority].append(give_up_time)
+            self.early_departed += 1
         else:  # successful departure
             self.departure.append(operator.next_free)
             self.departed_priority.append(priority)
             self.fatigue_remainder.append(give_up_time - (operator.next_free - arrival))
-            if customer_next_queue:
+            if customer_next_queue:  # only used for main queue
                 self.next_queue.append(customer_next_queue)
+        # add presence to every time unit
+        for t in range(int(arrival), int(operator.next_free) + 1):
+            Queue.customer_in_system[t] += 1
 
     def next_free_operator(self, time):
         """ either returns a free operator, if any.

@@ -1,13 +1,12 @@
 import re
 from collections import defaultdict
-
+import matplotlib.pyplot as plt
 import numpy as np
 
 from models import Queue
 
-N = 10000
+N = int(1e7)
 priority_prob = np.array([0.50, 0.20, 0.15, 0.10, 0.05])
-total_wait = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
 
 
 def sample_priorities(elements, n, weights) -> np.array:
@@ -21,10 +20,11 @@ def sample_next_queue(elements, n) -> np.array:
 
 
 def sample_arrivals(arrival_rate, n):
+    """samples n arrivals using exponential inter-arrival samples"""
     inter_arrivals = np.random.exponential(1 / arrival_rate, size=n)
     result = [inter_arrivals[0]]
     for i in range(1, n):
-        result = np.append(result, result[-1] + inter_arrivals[i])
+        result.append(result[-1] + inter_arrivals[i])
     return result
 
 
@@ -65,7 +65,48 @@ def run_all_queues(customers_arrival, customers_priority, customers_early_depart
 
 
 def display_stats():
-    pass  # TODO
+    """
+    TODO check if np.sum performs better
+    """
+    queue_wait = dict()
+    service_time = dict()
+    for i in range(5):  # priorities
+        level_i_count = sum([len(queue.customer_wait[i]) for queue in Queue.queues])
+        level_i_wait = sum([sum(queue.customer_wait[i]) for queue in Queue.queues])
+        queue_wait[i] = (level_i_count, level_i_wait)
+        service_time[i] = sum([sum([op.service_log[i] for op in queue.operators]) for queue in Queue.queues])
+
+    print('1.\tAverage time spent in system by customers:')
+    print(f'\t\t- All: {sum([queue_wait[i][1] + service_time[i] for i in range(5)]) / N}')
+    for i in range(4, -1, -1):
+        print(f'\t\t- Priority {i}: {(queue_wait[i][1] + service_time[i]) / queue_wait[i][0]}')
+    #
+    print('2.\tAverage time spent in queues by customers:')
+    print(f'\t\t- All: {sum([queue_wait[i][1] for i in range(5)]) / N}')
+    for i in range(4, -1, -1):
+        print(f'\t\t- Priority {i}: {queue_wait[i][1] / queue_wait[i][0]}')
+    #
+    total_early_departed = sum([queue.early_departed for queue in Queue.queues])
+    print(f'3.\tTotal {total_early_departed} got exhausted and left early.')
+    #
+    print(f'4.\tAverage length of every queue in system:')
+    print(f'\t\t- Main Queue: {np.average(Queue.queues[0].queue_len)}')
+    for i in range(len(Queue.queues) - 1):
+        print(f'\t\t- Queue {i + 1}: {np.average(Queue.queues[i].queue_len)}')
+    #
+    for queue_idx in len(Queue.queues):
+        plt.plot(Queue.queues[queue_idx].queue_len)
+        plt.title(f'6.{queue_idx}. Queue {queue_idx}' if queue_idx > 0 else 'Main Queue')
+        plt.show()
+    #
+    plt.plot(Queue.customer_in_system.keys(), Queue.customer_in_system.values())
+    plt.title(f'7. Number of customers in system per time')
+    plt.show()
+    #
+
+    # TODO 10
+    # TODO 8
+    # TODO 5
 
 
 def run_simulation():
