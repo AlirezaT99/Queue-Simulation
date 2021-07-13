@@ -1,4 +1,6 @@
 import re
+from collections import defaultdict
+
 import numpy as np
 
 from models import Queue
@@ -45,6 +47,27 @@ def sample_fatigue(fatigue, n):
     return np.random.exponential(1 / fatigue, size=n)
 
 
+def run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue):
+    # Run reception queue
+    main_queue: Queue = Queue.queues.pop()
+    main_queue.run(customers_arrival, customers_priority, customers_early_departure, customers_next_queue)
+    # Extract other queues' input
+    queue_arrivals, queue_priority, queue_give_up = defaultdict(list), defaultdict(list), defaultdict(list)
+    for i in range(len(main_queue.next_queue)):
+        queue_arrivals[main_queue.next_queue[i]] = main_queue.departure[i]
+        queue_priority[main_queue.next_queue[i]] = main_queue.departed_priority[i]
+        queue_give_up[main_queue.next_queue[i]] = main_queue.fatigue_remainder[i]
+    # Run other queues
+    for queue_idx in range(len(Queue.queues)):
+        Queue.queues[queue_idx].run(queue_arrivals[queue_idx], queue_priority[queue_idx], queue_give_up[queue_idx])
+    # Put main queue back in the list
+    Queue.queues.insert(0, main_queue)
+
+
+def display_stats():
+    pass  # TODO
+
+
 def run_simulation():
     # Setup
     queues_count, fatigue, arrival, service_rate, queues_info = process_input()
@@ -52,15 +75,12 @@ def run_simulation():
     # Sample
     customers_arrival = sample_arrivals(arrival, N)
     customers_priority = sample_priorities(range(5), N, priority_prob)
-    customers_next_queue = sample_next_queue(range(queues_count), N)
     customers_early_departure = sample_fatigue(fatigue, N)
+    customers_next_queue = sample_next_queue(range(queues_count), N)
     # Run
-    main_queue: Queue = Queue.queues.pop()
-    main_queue.run(customers_arrival, customers_priority, customers_early_departure)
-    for queue in Queue.queues:
-        queue.run([], [])  # TODO set by main
+    run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue)
     # Display stats
-    pass
+    display_stats()
 
 
 if __name__ == '__main__':
