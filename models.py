@@ -71,8 +71,8 @@ class Queue:
             if customer_next_queue is not None:  # only used for main queue
                 self.next_queue.append(customer_next_queue)
         # add presence to every time unit
-        for t in range(int(arrival), int(operator.next_free) + 1):
-            Queue.customer_in_system[t / 60] += 1  # x-axis is minutes
+        for t in range(int(arrival) // 3600, int(operator.next_free) // 3600 + 1):
+            Queue.customer_in_system[t] += 1  # x-axis is minutes
 
     def next_free_operator(self, time):
         """ either returns a free operator, if any.
@@ -119,6 +119,3 @@ class Operator:
         else:
             self.next_free = arrival + service_time
         return service_time
-
-    def get_stats(self):
-        return np.average(self.service_log), np.sum(self.service_log) / self.next_free

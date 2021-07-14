@@ -1,11 +1,12 @@
 import re
+import time
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 
 from models import Queue
 
-N = int(1e2)
+N = int(1e7)
 priority_prob = np.array([0.50, 0.20, 0.15, 0.10, 0.05])
 
 
@@ -120,9 +121,13 @@ def run_simulation():
     customers_early_departure = sample_fatigue(fatigue, N)
     customers_next_queue = sample_next_queue(range(queues_count), N)
     # Run
+    start = time.time()
     run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue)
+    print(f'>>> running queues took {time.time() - start}')
     # Display stats
+    start = time.time()
     display_stats()
+    print(f'>>> gathering stats took {time.time() - start}')
 
 
 if __name__ == '__main__':
