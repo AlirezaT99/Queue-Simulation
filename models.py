@@ -32,7 +32,7 @@ class Queue:
                     self.early_departed += 1
             self.queue = deque(filter(lambda c: arrivals[i] < c[1] + c[3], self.queue))
             # Handle queue (if there exists a free op and someone in the queue)
-            while self.queue and next_op[1]:
+            while self.queue and (not next_op[1]):
                 customer = self.queue.popleft()  # (idx, arrival, priority, give_up, next_queue)
                 free_time = next_op[0].next_free
                 self.assign_to_operator(next_op[0], customer[1], customer[2], customer[3], customer[4], in_queue=True)
@@ -48,6 +48,7 @@ class Queue:
         # After arrivals, some customers might still be in the queue
         next_op = self.next_free_operator(self.departure[-1])
         while self.queue:
+            self.queue_len.append(len(self.queue))
             customer = self.queue.popleft()
             free_time = next_op[0].next_free
             self.assign_to_operator(next_op[0], customer[1], customer[2], customer[3], customer[4], in_queue=True)
@@ -71,7 +72,7 @@ class Queue:
                 self.next_queue.append(customer_next_queue)
         # add presence to every time unit
         for t in range(int(arrival), int(operator.next_free) + 1):
-            Queue.customer_in_system[t] += 1
+            Queue.customer_in_system[t / 60] += 1  # x-axis is minutes
 
     def next_free_operator(self, time):
         """ either returns a free operator, if any.
@@ -111,7 +112,7 @@ class Operator:
         return self.next_free <= time
 
     def assign_job(self, arrival, priority, in_queue=False):
-        service_time = np.random.exponential(self.service_time)
+        service_time = np.random.exponential(1 / self.service_time)
         self.service_log[priority].append(service_time)
         if in_queue:
             self.next_free += service_time
