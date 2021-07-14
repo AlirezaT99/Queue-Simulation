@@ -5,7 +5,7 @@ import numpy as np
 
 from models import Queue
 
-N = int(1e7)
+N = int(1e2)
 priority_prob = np.array([0.50, 0.20, 0.15, 0.10, 0.05])
 
 
@@ -54,9 +54,9 @@ def run_all_queues(customers_arrival, customers_priority, customers_early_depart
     # Extract other queues' input
     queue_arrivals, queue_priority, queue_give_up = defaultdict(list), defaultdict(list), defaultdict(list)
     for i in range(len(main_queue.next_queue)):
-        queue_arrivals[main_queue.next_queue[i]] = main_queue.departure[i]
-        queue_priority[main_queue.next_queue[i]] = main_queue.departed_priority[i]
-        queue_give_up[main_queue.next_queue[i]] = main_queue.fatigue_remainder[i]
+        queue_arrivals[main_queue.next_queue[i]].append(main_queue.departure[i])
+        queue_priority[main_queue.next_queue[i]].append(main_queue.departed_priority[i])
+        queue_give_up[main_queue.next_queue[i]].append(main_queue.fatigue_remainder[i])
     # Run other queues
     for queue_idx in range(len(Queue.queues)):
         Queue.queues[queue_idx].run(queue_arrivals[queue_idx], queue_priority[queue_idx], queue_give_up[queue_idx])
@@ -65,16 +65,19 @@ def run_all_queues(customers_arrival, customers_priority, customers_early_depart
 
 
 def display_stats():
-    """
-    TODO check if np.sum performs better
-    """
+    """TODO check if np.sum performs better"""
     queue_wait = dict()
     service_time = dict()
     for i in range(5):  # priorities
         level_i_count = sum([len(queue.customer_wait[i]) for queue in Queue.queues])
         level_i_wait = sum([sum(queue.customer_wait[i]) for queue in Queue.queues])
         queue_wait[i] = (level_i_count, level_i_wait)
-        service_time[i] = sum([sum([op.service_log[i] for op in queue.operators]) for queue in Queue.queues])
+        # service_time[i] = sum([sum(op.service_log[i]) for op in queue.operators] for queue in Queue.queues)
+        total_service_i = 0
+        for queue in Queue.queues:
+            for op in queue.operators:
+                total_service_i += sum(op.service_log[i])
+        service_time[i] = total_service_i
 
     print('1.\tAverage time spent in system by customers:')
     print(f'\t\t- All: {sum([queue_wait[i][1] + service_time[i] for i in range(5)]) / N}')
@@ -94,18 +97,16 @@ def display_stats():
     for i in range(len(Queue.queues) - 1):
         print(f'\t\t- Queue {i + 1}: {np.average(Queue.queues[i].queue_len)}')
     #
-    for queue_idx in len(Queue.queues):
+    for queue_idx in range(len(Queue.queues)):
         plt.plot(Queue.queues[queue_idx].queue_len)
         plt.title(f'6.{queue_idx}. Queue {queue_idx}' if queue_idx > 0 else 'Main Queue')
         plt.show()
     #
-    plt.plot(Queue.customer_in_system.keys(), Queue.customer_in_system.values())
+    plt.plot(sorted(Queue.customer_in_system.keys()), Queue.customer_in_system.values())
     plt.title(f'7. Number of customers in system per time')
     plt.show()
-    #
-
+    # TODO 9
     # TODO 10
-    # TODO 8
     # TODO 5
 
 
