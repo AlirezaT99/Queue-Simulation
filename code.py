@@ -6,8 +6,9 @@ import numpy as np
 
 from models import Queue
 
-N = int(1e7)
+N = int(1e5)
 priority_prob = np.array([0.50, 0.20, 0.15, 0.10, 0.05])
+arrival, fatigue = -1, -1
 
 
 def sample_priorities(elements, n, weights) -> np.array:
@@ -39,13 +40,14 @@ def process_input():
 
 def setup_queues(main_service, queues):
     """creates queues using the parameters provided"""
+    Queue.queues.clear()
     for queue_info in queues:
         Queue(queue_info)
     Queue([main_service])  # Reception
 
 
-def sample_fatigue(fatigue, n):
-    return np.random.exponential(1 / fatigue, size=n)
+def sample_fatigue(fatigue_rate, n):
+    return np.random.exponential(1 / fatigue_rate, size=n)
 
 
 def run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue, total_wait):
@@ -67,10 +69,6 @@ def run_all_queues(customers_arrival, customers_priority, customers_early_depart
                                     total_wait, queue_customers[queue_idx])
     # Put main queue back in the list
     Queue.queues.insert(0, main_queue)
-
-
-def find_appropriate_rate():
-    pass
 
 
 def display_stats(customer_time, customers_priority: np.array):
@@ -124,12 +122,56 @@ def display_stats(customer_time, customers_priority: np.array):
         plt.title(f'10.{i} Total waiting time (Priority {i})')
         plt.show()
     #
-    find_appropriate_rate()
+    print(f'5. The mean service rate that causes zero customer in queues:')
+    rate = find_appropriate_rate()
+    print(f'\t=> The mean rate is {rate}.')
 
 
-def run_simulation():
+def find_appropriate_rate(epochs=100, high_precision=False):
+    # run gc for no apparent reason
+    import gc
+    gc.collect()
+    # Trade-off between time and accuracy
+    global N
+    if not high_precision:
+        N = int(1e4)
+    best_rate = -1
+    queues_count = len(Queue.queues) - 1
+    main_service_rate = Queue.queues[0].operators[0].service_rate
+    mean_queue_ops = int(np.mean([len(queue.operators) for queue in Queue.queues[1:]]))
+    step = new_rate = np.mean([np.mean([op.service_rate for op in queue.operators]) for queue in Queue.queues[1:]])
+    going_backwards = False
+    for i in range(epochs):
+        if are_queues_empty():
+            best_rate = new_rate
+            step /= 2
+            new_rate -= step
+            going_backwards = True
+        else:
+            if going_backwards:
+                step /= 2
+                going_backwards = False
+            else:
+                step *= 2
+            new_rate += step
+        queues_info = [[new_rate] * mean_queue_ops] * queues_count
+        print(f'## Attempt No.{i} with mean rate {new_rate} ##')
+        run_simulation((queues_count, fatigue, arrival, main_service_rate, queues_info))
+
+    return best_rate
+
+
+def are_queues_empty():
+    return sum([sum(queue.queue_len) for queue in Queue.queues]) == 0
+
+
+def run_simulation(params=None):
+    global fatigue, arrival
     # Setup
-    queues_count, fatigue, arrival, service_rate, queues_info = process_input()
+    if params is None:
+        queues_count, fatigue, arrival, service_rate, queues_info = process_input()
+    else:
+        queues_count, fatigue, arrival, service_rate, queues_info = params
     setup_queues(service_rate, queues_info)
     total_time = {i: {'queue': 0, 'service': 0} for i in range(N)}
     # Sample
@@ -138,15 +180,14 @@ def run_simulation():
     customers_priority = sample_priorities(range(5), N, priority_prob)
     customers_early_departure = sample_fatigue(fatigue, N)
     customers_next_queue = sample_next_queue(range(queues_count), N)
-    print(f'>>> sampling took {round(time.time() - start, 2)}s')
+    print(f'>>> sampling took {round(time.time() - start, 3)}s')
     # Run
     start = time.time()
     run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue, total_time)
-    print(f'>>> running queues took {round(time.time() - start, 2)}s')
+    print(f'>>> running queues took {round(time.time() - start, 3)}s')
     # Display stats
-    start = time.time()
-    display_stats(total_time, customers_priority)
-    print(f'>>> gathering and plotting stats took {round(time.time() - start, 2)}s')
+    if params is None:
+        display_stats(total_time, customers_priority)
 
 
 if __name__ == '__main__':
