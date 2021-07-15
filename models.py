@@ -18,10 +18,12 @@ class Queue:
         self.fatigue_remainder = list()
         self.departed_priority = list()
         self.next_queue = list()
+        self.next_queue_users = list()
 
-    def run(self, arrivals, priorities, give_up_times, next_queue=None):
+    def run(self, arrivals, priorities, give_up_times, user_dict, user_ids, next_queue=None):
         assert len(arrivals) == len(priorities)
         for i in range(len(arrivals)):
+            # print(user_ids)
             self.queue_len.append(len(self.queue))
             next_op = self.next_free_operator(arrivals[i])
             customer_next_queue = next_queue[i] if next_queue is not None else None
@@ -33,31 +35,36 @@ class Queue:
             self.queue = deque(filter(lambda c: arrivals[i] < c[1] + c[3], self.queue))
             # Handle queue (if there exists a free op and someone in the queue)
             while self.queue and (not next_op[1]):
-                customer = self.queue.popleft()  # (idx, arrival, priority, give_up, next_queue)
+                customer = self.queue.popleft()  # (idx, arrival, priority, give_up, next_queue, id)
                 free_time = next_op[0].next_free
-                self.assign_to_operator(next_op[0], customer[1], customer[2], customer[3], customer[4], in_queue=True)
+                self.assign_to_operator(next_op[0], customer[1], customer[2], customer[3], customer[4], user_dict,
+                                        customer[5], in_queue=True)
                 self.customer_wait[customer[2]].append(free_time - customer[1])
                 next_op = self.next_free_operator(arrivals[i])
             # Handle the new arrival
             operator, err = self.next_free_operator(arrivals[i])
             if not err:  # No need to wait
-                self.assign_to_operator(operator, arrivals[i], priorities[i], give_up_times[i], customer_next_queue)
+                self.assign_to_operator(operator, arrivals[i], priorities[i], give_up_times[i], customer_next_queue,
+                                        user_dict, user_ids[i])
                 self.customer_wait[priorities[i]].append(0)
             else:  # wait in queue
-                self.push_to_queue(i, arrivals[i], priorities[i], give_up_times[i], customer_next_queue)
+                self.push_to_queue(i, arrivals[i], priorities[i], give_up_times[i], customer_next_queue, user_ids[i])
         # After arrivals, some customers might still be in the queue
         next_op = self.next_free_operator(self.departure[-1])
         while self.queue:
             self.queue_len.append(len(self.queue))
             customer = self.queue.popleft()
             free_time = next_op[0].next_free
-            self.assign_to_operator(next_op[0], customer[1], customer[2], customer[3], customer[4], in_queue=True)
+            self.assign_to_operator(next_op[0], customer[1], customer[2], customer[3], customer[4], user_dict, customer[5],
+                                    in_queue=True)
             self.customer_wait[customer[2]].append(free_time - customer[1])
             next_op = self.next_free_operator(self.departure[-1])
 
-    def assign_to_operator(self, operator, arrival, priority, give_up_time, customer_next_queue, in_queue=False):
+    def assign_to_operator(self, operator, arrival, priority, give_up_time, customer_next_queue, user_dict, user_id,
+                           in_queue=False):
         old_next_free = operator.next_free
-        operator.assign_job(arrival, priority, in_queue)
+        service_time = operator.assign_job(arrival, priority, in_queue)
+        user_dict[user_id] += service_time
         # What if the customer decides to leave during service
         if operator.next_free > arrival + give_up_time:
             operator.next_free = arrival + give_up_time
@@ -70,6 +77,7 @@ class Queue:
             self.fatigue_remainder.append(give_up_time - (operator.next_free - arrival))
             if customer_next_queue is not None:  # only used for main queue
                 self.next_queue.append(customer_next_queue)
+                self.next_queue_users.append(user_id)
         # add presence to every time unit
         for t in range(int(arrival) // 3600, int(operator.next_free) // 3600 + 1):
             Queue.customer_in_system[t] += 1  # x-axis is minutes
@@ -83,13 +91,13 @@ class Queue:
                 return op, False
         return min(self.operators, key=lambda k: k.next_free), True
 
-    def push_to_queue(self, idx, arrival_time, priority, give_up_time, customer_next_queue):
+    def push_to_queue(self, idx, arrival_time, priority, give_up_time, customer_next_queue, user_id):
         """pushes customers to queue.
         The new customer is prior to old ones if has a higher priority.
         Tie breaker: The one who arrived sooner
         TODO O(n) -> O(log(n)) using binary search
         """
-        new_customer = (idx, arrival_time, priority, give_up_time, customer_next_queue)
+        new_customer = (idx, arrival_time, priority, give_up_time, customer_next_queue, user_id)
         if not self.queue:
             self.queue.appendleft(new_customer)
         else:
@@ -103,16 +111,16 @@ class Queue:
 
 
 class Operator:
-    def __init__(self, service_time):
+    def __init__(self, service_rate):
         self.next_free = 0
-        self.service_time = service_time
+        self.service_rate = service_rate
         self.service_log = defaultdict(list)
 
     def is_available(self, time):
         return self.next_free <= time
 
     def assign_job(self, arrival, priority, in_queue=False):
-        service_time = np.random.exponential(1 / self.service_time)
+        service_time = np.random.exponential(1 / self.service_rate)
         self.service_log[priority].append(service_time)
         if in_queue:
             self.next_free += service_time

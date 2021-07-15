@@ -48,24 +48,28 @@ def sample_fatigue(fatigue, n):
     return np.random.exponential(1 / fatigue, size=n)
 
 
-def run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue):
+def run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue, user_dict):
     # Run reception queue
     main_queue: Queue = Queue.queues.pop()
-    main_queue.run(customers_arrival, customers_priority, customers_early_departure, customers_next_queue)
+    main_queue.run(customers_arrival, customers_priority, customers_early_departure, user_dict, list(user_dict.keys()),
+                   customers_next_queue)
     # Extract other queues' input
-    queue_arrivals, queue_priority, queue_give_up = defaultdict(list), defaultdict(list), defaultdict(list)
+    queue_arrivals, queue_priority, queue_give_up, queue_users = defaultdict(list), defaultdict(list), defaultdict(
+        list), defaultdict(list)
     for i in range(len(main_queue.next_queue)):
         queue_arrivals[main_queue.next_queue[i]].append(main_queue.departure[i])
         queue_priority[main_queue.next_queue[i]].append(main_queue.departed_priority[i])
         queue_give_up[main_queue.next_queue[i]].append(main_queue.fatigue_remainder[i])
+        queue_users[main_queue.next_queue[i]].append(main_queue.next_queue_users[i])
     # Run other queues
     for queue_idx in range(len(Queue.queues)):
-        Queue.queues[queue_idx].run(queue_arrivals[queue_idx], queue_priority[queue_idx], queue_give_up[queue_idx])
+        Queue.queues[queue_idx].run(queue_arrivals[queue_idx], queue_priority[queue_idx], queue_give_up[queue_idx],
+                                    user_dict, queue_users[queue_idx])
     # Put main queue back in the list
     Queue.queues.insert(0, main_queue)
 
 
-def display_stats():
+def display_stats(user_dict):
     """TODO check if np.sum performs better"""
     queue_wait = dict()
     service_time = dict()
@@ -106,6 +110,10 @@ def display_stats():
     plt.plot(sorted(Queue.customer_in_system.keys()), Queue.customer_in_system.values())
     plt.title(f'7. Number of customers in system per time')
     plt.show()
+
+    plt.plot(sorted(user_dict.keys()), user_dict.values())
+    plt.title(f'7. Service Time')
+    plt.show()
     # TODO 9
     # TODO 10
     # TODO 5
@@ -120,13 +128,14 @@ def run_simulation():
     customers_priority = sample_priorities(range(5), N, priority_prob)
     customers_early_departure = sample_fatigue(fatigue, N)
     customers_next_queue = sample_next_queue(range(queues_count), N)
+    user_dict = {i: 0 for i in range(N)}
     # Run
     start = time.time()
-    run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue)
+    run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue, user_dict)
     print(f'>>> running queues took {time.time() - start}')
     # Display stats
     start = time.time()
-    display_stats()
+    display_stats(user_dict)
     print(f'>>> gathering stats took {time.time() - start}')
 
 
