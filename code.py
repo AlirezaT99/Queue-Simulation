@@ -6,7 +6,7 @@ import numpy as np
 
 from models import Queue
 
-N = int(1e5)
+N = int(1e7)
 priority_prob = np.array([0.50, 0.20, 0.15, 0.10, 0.05])
 arrival, fatigue = -1, -1
 
@@ -40,7 +40,10 @@ def process_input():
 
 def setup_queues(main_service, queues):
     """creates queues using the parameters provided"""
+    # Reset Queue
     Queue.queues.clear()
+    Queue.customer_in_system = defaultdict(int)
+
     for queue_info in queues:
         Queue(queue_info)
     Queue([main_service])  # Reception
@@ -122,12 +125,11 @@ def display_stats(customer_time, customers_priority: np.array):
         plt.title(f'10.{i} Total waiting time (Priority {i})')
         plt.show()
     #
-    print(f'5. The mean service rate that causes zero customer in queues:')
     rate = find_appropriate_rate()
-    print(f'\t=> The mean rate is {rate}.')
+    print(f'5. The mean service rate that causes zero customer in queues: {rate}')
 
 
-def find_appropriate_rate(epochs=100, high_precision=False):
+def find_appropriate_rate(epochs=20, high_precision=False):
     # run gc for no apparent reason
     import gc
     gc.collect()
@@ -155,14 +157,14 @@ def find_appropriate_rate(epochs=100, high_precision=False):
                 step *= 2
             new_rate += step
         queues_info = [[new_rate] * mean_queue_ops] * queues_count
-        print(f'## Attempt No.{i} with mean rate {new_rate} ##')
+        # print(f'\tAttempt No.{i + 1} with mean rate {new_rate}')
         run_simulation((queues_count, fatigue, arrival, main_service_rate, queues_info))
 
     return best_rate
 
 
 def are_queues_empty():
-    return sum([sum(queue.queue_len) for queue in Queue.queues]) == 0
+    return sum([sum(queue.queue_len) for queue in Queue.queues[1:]]) == 0
 
 
 def run_simulation(params=None):
@@ -180,11 +182,13 @@ def run_simulation(params=None):
     customers_priority = sample_priorities(range(5), N, priority_prob)
     customers_early_departure = sample_fatigue(fatigue, N)
     customers_next_queue = sample_next_queue(range(queues_count), N)
-    print(f'>>> sampling took {round(time.time() - start, 3)}s')
+    if params is None:
+        print(f'>>> sampling took {round(time.time() - start, 3)}s')
     # Run
     start = time.time()
     run_all_queues(customers_arrival, customers_priority, customers_early_departure, customers_next_queue, total_time)
-    print(f'>>> running queues took {round(time.time() - start, 3)}s')
+    if params is None:
+        print(f'>>> running queues took {round(time.time() - start, 3)}s')
     # Display stats
     if params is None:
         display_stats(total_time, customers_priority)
